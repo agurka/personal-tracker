@@ -42,8 +42,9 @@ def this_week():
             x[1]["date"]: round(x[1]["duration"] / 3600, 2) for x in daily_df.iterrows()
         },
         "in_progress": in_progress,
-        "time_in_progress": round(time_in_progress, 2),
         "percentage": round((total / weekly_target) * 100, 2),
     }
+    if in_progress:
+        response["time_in_progress"] = round(time_in_progress, 2)
 
     return response
