@@ -4,6 +4,40 @@ import pandas as pd
 import datetime
 
 
+def get_daily_projection(
+    weekly_target_hr, work_days_cnt, last_day_target_hr, daily_times_real
+):
+    today = datetime.datetime.now().date()
+    before_today = {
+        date: time for date, time in daily_times_real.items() if date < today
+    }
+
+    total_worked = sum(before_today.values())
+    remaining_time = weekly_target_hr - total_worked
+
+    remaining_days_cnt = work_days_cnt - len(before_today)
+
+    daily_projection = {**before_today}
+
+    remaining_days = [
+        today + datetime.timedelta(days=i) for i in range(remaining_days_cnt)
+    ]
+    if remaining_days_cnt == 1:
+        val = weekly_target_hr - sum(daily_projection.values())
+        daily_projection[remaining_days[0]] = round(val, 2)
+    else:
+        remaining_time_daily = (remaining_time - last_day_target_hr) / (
+            len(remaining_days) - 1
+        )
+        remaining_time_daily = round(remaining_time_daily, 2)
+        for date in remaining_days:
+            if date == remaining_days[-1]:
+                daily_projection[date] = last_day_target_hr
+            else:
+                daily_projection[date] = remaining_time_daily
+    return daily_projection
+
+
 def this_week():
     df = utils.time_tracker.get_data()
     df["date"] = df["start_time"].dt.date
@@ -35,28 +69,28 @@ def this_week():
 
     # TODO adapt weekly target and work_days_cnt based on public holidays? if possible, maybe look into personal calendar
     work_days_cnt = 5
-    weekly_target = utils.common.read_config()["tt_weekly_target"]
-    friday_target_hr = 5
+    weekly_target_hr = utils.common.read_config()["tt_weekly_target"]
+    last_day_target_hr = 5
 
-    weekly_time_remaining = round(weekly_target - total, 2)
-    daily_values = {
+    weekly_time_remaining = round(weekly_target_hr - total, 2)
+    daily_times_real = {
         x[1]["date"]: round(x[1]["duration"] / 3600, 2) for x in daily_df.iterrows()
     }
-    projected_daily_avg = (weekly_time_remaining - friday_target_hr) / (
-        work_days_cnt - len(daily_values) - 1  # - 1 for friday
-    )
-    projected_daily_avg = round(projected_daily_avg, 2)
 
     # TODO once there is a frontend, return time worked for day + if in_progress a timestamp of last start event so we can live update
     response = {
         "total": round(total, 2),
-        "daily": daily_values,
+        "daily_times_real": daily_times_real,
         "in_progress": in_progress,
-        "percentage": round((total / weekly_target) * 100, 2),
+        "percentage": round((total / weekly_target_hr) * 100, 2),
         "weekly_time_remaining": weekly_time_remaining,
-        "projected_daily_avg_for_5hr_friday": projected_daily_avg,
     }
+
     if in_progress:
         response["time_in_progress"] = round(time_in_progress, 2)
+
+    response["daily_times_projected"] = get_daily_projection(
+        weekly_target_hr, work_days_cnt, last_day_target_hr, daily_times_real
+    )
 
     return response
