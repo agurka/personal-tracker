@@ -6,7 +6,7 @@ def all_data():
     path = utils.paydays.get_path_to_data()
     df = pd.read_csv(path)
     df = df.set_index("date")
-    df.index = pd.to_datetime(df.index).strftime("%Y-%m-%d")
+    df.index = pd.to_datetime(df.index, utc=True).strftime("%Y-%m-%d")
 
     json_data = {
         "data": [
