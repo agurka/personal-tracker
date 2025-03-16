@@ -15,6 +15,9 @@ class Context:
             cfg = json.load(f)
         return cfg
 
+    def get_config(self, key):
+        return self._config[key]
+
     def filepath(self, request_path):
         data_files = self._config.get("data_files")
         mapping = {

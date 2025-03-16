@@ -1,6 +1,8 @@
 {
-    "data_files": {
-        "time_tracker": "",
-        "paydays": ""
-    }
+  "data_files": {
+    "time_tracker": "",
+    "paydays": ""
+  },
+  "tt_weekly_target": 40,
+  "last_day_target_hrs": 6
 }

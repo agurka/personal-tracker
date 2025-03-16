@@ -1,98 +1,88 @@
 import utils.common
 import utils.time_tracker
 import pandas as pd
-import datetime
+from pprint import pprint
 
 
-def get_daily_projection(
-    weekly_target_hr, work_days_cnt, last_day_target_hr, daily_times_real
-):
-    today = datetime.datetime.now().date()
-    before_today = {
-        date: time for date, time in daily_times_real.items() if date < today
-    }
+def get_daily_projection(weekly_target_hr, last_day_target_hr, daily_df):
+    # convert to seconds for interoperability
+    weekly_target_sec = weekly_target_hr * 3600
+    last_day_target_sec = last_day_target_hr * 3600
 
-    total_worked = sum(before_today.values())
-    remaining_time = weekly_target_hr - total_worked
+    # get all work days in the week
+    df = utils.time_tracker.working_days()
 
-    remaining_days_cnt = work_days_cnt - len(before_today)
+    # filter out past days
+    # today = pd.Timestamp(year=2025, month=3, day=14)
+    today = pd.Timestamp.now().to_datetime64()
+    daily_df = daily_df[daily_df["date"] < today]
+    df = df[df["date"] >= today]
 
-    daily_projection = {**before_today}
+    # use real data for past days, empty (to be calculated) for future
+    df = pd.concat([daily_df, df])
 
-    remaining_days = [
-        today + datetime.timedelta(days=i) for i in range(remaining_days_cnt)
-    ]
-    if remaining_days_cnt == 1:
-        val = weekly_target_hr - sum(daily_projection.values())
-        daily_projection[remaining_days[0]] = round(val, 2)
+    last_working_day = df["date"].max()
+
+    if today > last_working_day:
+        return utils.time_tracker.daily_times_str(df)
+
+    # fill in missing days
+    total_counted = df["duration"].sum(skipna=True)
+
+    remaining = weekly_target_sec - total_counted
+    if today == last_working_day:
+        df.loc[df["date"] == last_working_day, "duration"] = remaining
     else:
-        remaining_time_daily = (remaining_time - last_day_target_hr) / (
-            len(remaining_days) - 1
-        )
-        remaining_time_daily = round(remaining_time_daily, 2)
-        for date in remaining_days:
-            if date == remaining_days[-1]:
-                daily_projection[date] = last_day_target_hr
-            else:
-                daily_projection[date] = remaining_time_daily
-    return daily_projection
+        # set time for the last day
+        df.at[df.index[-1], "duration"] = last_day_target_sec
+        remaining -= last_day_target_sec
+
+        empty_values = df["duration"].isna().sum()
+        if empty_values:
+            value_per_day = remaining / empty_values
+            df = df.fillna(value=value_per_day)
+
+    return utils.time_tracker.daily_times_str(df)
 
 
-def this_week():
-    df = utils.time_tracker.get_data()
-    df["date"] = df["start_time"].dt.date
+def this_week(ctx, request_path):
+    if ctx.has_valid_data(request_path):
+        return ctx.data(request_path)
 
-    today = datetime.date.today()
-    start_of_week = today - datetime.timedelta(days=today.weekday())
-    df = df[df["date"] >= start_of_week]
-
-    # print(df)
-
-    in_progress = pd.isnull(df.iloc[-1]["end_time"])
-
-    if in_progress:
-        start_time_today = df.iloc[-1]["start_time"]
+    df = utils.time_tracker.get_data(ctx, request_path)
+    df = utils.time_tracker.filter_week(df, utils.time_tracker.current_week())
 
     daily_df = df.groupby("date")["duration"].sum().reset_index()
-    daily_df.columns = ["date", "duration"]
+    daily_times_real = utils.time_tracker.daily_times_str(daily_df)
 
-    daily_df.set_index("date")
-    daily_df["day_str"] = pd.to_datetime(daily_df["date"]).dt.strftime("%a")
-
-    total = float(daily_df["duration"].sum() / 3600)
-
-    if in_progress:
-        seconds = (
-            datetime.datetime.now(tz=datetime.timezone.utc) - start_time_today
-        ).total_seconds()
-        time_in_progress = seconds / 3600
-
-        total += time_in_progress
+    time_worked, in_progress, time_since_start = utils.time_tracker.total_time_worked(
+        df, daily_df
+    )
+    time_worked_hr = time_worked / 3600
 
     # TODO adapt weekly target and work_days_cnt based on public holidays? if possible, maybe look into personal calendar
     work_days_cnt = 5
-    weekly_target_hr = utils.common.read_config()["tt_weekly_target"]
-    last_day_target_hr = 6
-
-    weekly_time_remaining = round(weekly_target_hr - total, 2)
-    daily_times_real = {
-        x[1]["date"]: round(x[1]["duration"] / 3600, 2) for x in daily_df.iterrows()
-    }
+    weekly_target_hr = ctx.get_config("tt_weekly_target")
+    last_day_target_hr = ctx.get_config("last_day_target_hrs")
+    weekly_time_remaining = round(weekly_target_hr - time_worked_hr, 2)
 
     # TODO once there is a frontend, return time worked for day + if in_progress a timestamp of last start event so we can live update
     response = {
-        "total": round(total, 2),
+        "total_time_worked": round(time_worked_hr, 2),
         "daily_times_real": daily_times_real,
         "in_progress": in_progress,
-        "percentage": round((total / weekly_target_hr) * 100, 2),
+        "percentage": round((time_worked_hr / weekly_target_hr) * 100, 2),
         "weekly_time_remaining": weekly_time_remaining,
     }
 
     if in_progress:
-        response["time_in_progress"] = round(time_in_progress, 2)
+        response["time_in_progress"] = round(time_since_start, 2)
 
     response["daily_times_projected"] = get_daily_projection(
-        weekly_target_hr, work_days_cnt, last_day_target_hr, daily_times_real
+        weekly_target_hr,
+        last_day_target_hr,
+        daily_df,
     )
 
+    ctx.update_data(request_path, response)
     return response

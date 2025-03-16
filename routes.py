@@ -18,5 +18,5 @@ async def paydays(request: Request):
 
 
 @router.get("/time/weekly")
-async def time_weekly():
-    return components.time_tracker.this_week()
+async def time_weekly(request: Request):
+    return components.time_tracker.this_week(ctx, request.url.path)
