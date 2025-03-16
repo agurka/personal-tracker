@@ -46,6 +46,8 @@ def this_week():
     start_of_week = today - datetime.timedelta(days=today.weekday())
     df = df[df["date"] >= start_of_week]
 
+    # print(df)
+
     in_progress = pd.isnull(df.iloc[-1]["end_time"])
 
     if in_progress:
@@ -70,7 +72,7 @@ def this_week():
     # TODO adapt weekly target and work_days_cnt based on public holidays? if possible, maybe look into personal calendar
     work_days_cnt = 5
     weekly_target_hr = utils.common.read_config()["tt_weekly_target"]
-    last_day_target_hr = 5
+    last_day_target_hr = 6
 
     weekly_time_remaining = round(weekly_target_hr - total, 2)
     daily_times_real = {
