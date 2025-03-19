@@ -14,7 +14,7 @@ def get_daily_projection(weekly_target_hr, last_day_target_hr, daily_df):
 
     # filter out past days
     # today = pd.Timestamp(year=2025, month=3, day=14)
-    today = pd.Timestamp.now().to_datetime64()
+    today = pd.to_datetime("today").normalize()
     daily_df = daily_df[daily_df["date"] < today]
     df = df[df["date"] >= today]
 
@@ -76,7 +76,7 @@ def this_week(ctx, request_path):
     }
 
     if in_progress:
-        response["time_in_progress"] = round(time_since_start, 2)
+        response["time_in_progress"] = round(time_since_start / 3600, 2)
 
     response["daily_times_projected"] = get_daily_projection(
         weekly_target_hr,
